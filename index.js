@@ -56,7 +56,6 @@ app.post('/webhook', express.raw({ type: '*/*' }), async (req, res) => {
 });
 
 async function handleEvent(event) {
-  console.log('Event type:', event.type);
   if (event.type !== 'message' || event.message?.type !== 'text') return;
 
   const text  = event.message.text.trim();
@@ -66,45 +65,45 @@ async function handleEvent(event) {
   if (/รายการสินค้า|สินค้า|ราคา/.test(text)) {
     console.log('→ Sending product carousel');
     return replyMsg(token, productCarousel());
-  }
-  if (/เอกสาร|ใบเสนอ|ใบเสร็จ|ใบ/.test(text)) {
+  } else if (/เอกสาร|ใบเสนอ|ใบเสร็จ|ใบ/.test(text)) {
     console.log('→ Sending doc menu');
     return replyMsg(token, docMenu());
-  }
-  if (/สวัสดี|เมนู|help|hi/i.test(text)) {
+  } else if (/สวัสดี|เมนู|help|hi/i.test(text)) {
     console.log('→ Sending welcome');
     return replyMsg(token, welcome());
+  } else {
+    console.log('→ Using Gemini AI');
+    const aiText = await askAI(text);
+    return replyMsg(token, { type: 'text', text: aiText });
   }
-
-  console.log('→ Using Gemini AI');
-  const aiText = await askAI(text);
-  return replyMsg(token, { type: 'text', text: aiText });
 }
 
 // ── Gemini AI ─────────────────────────────────────────────
 async function askAI(userText) {
   try {
-    const res = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GOOGLE_GEMINI_API_KEY}`,
-      {
-        system_instruction: {
-          parts: [{ text: 'คุณคือพนักงานขายของบริษัท Innovation Link จำหน่ายซองม้วนและบรรจุภัณฑ์ ตอบสุภาพ กระชับ เป็นภาษาไทย ไม่เกิน 3 ประโยค' }]
-        },
-        contents: [{
-          parts: [{ text: userText }]
-        }],
-        generationConfig: {
-          maxOutputTokens: 300,
-          temperature: 0.7
-        }
-      },
-      { headers: { 'Content-Type': 'application/json' } }
-    );
-    return res.data?.candidates?.[0]?.content?.parts?.[0]?.text
-      || 'ขออภัย ระบบ AI มีปัญหา กรุณาลองใหม่อีกครั้ง';
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${process.env.GOOGLE_GEMINI_API_KEY}`;
+
+    const response = await axios.post(url, {
+      contents: [{
+        parts: [{
+          text: `คุณคือพนักงานขายของบริษัท Innovation Link จำหน่ายซองม้วนและบรรจุภัณฑ์ ตอบสุภาพ กระชับ เป็นภาษาไทย ไม่เกิน 3 ประโยค\n\nคำถาม: ${userText}`
+        }]
+      }],
+      generationConfig: {
+        maxOutputTokens: 300,
+        temperature: 0.7
+      }
+    }, {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 8000
+    });
+
+    return response.data?.candidates?.[0]?.content?.parts?.[0]?.text
+      || 'ขออภัยครับ ผมไม่เข้าใจคำถามนี้ รบกวนลองอีกครั้งครับ';
+
   } catch (err) {
-    console.error('AI ERROR (Gemini):', err.response?.data || err.message);
-    return 'ขออภัย ระบบ AI มีปัญหา กรุณาลองใหม่อีกครั้ง';
+    console.error('AI ERROR:', err.response?.data || err.message);
+    return 'ขออภัย ระบบ AI ขัดข้องชั่วคราวครับ';
   }
 }
 
@@ -265,4 +264,4 @@ function replyMsg(replyToken, message) {
 }
 
 const port = process.env.PORT || 3000;
-app.listen(port, () => console.log(`Running on port ${port}`));
+app.listen(port, () => console.log(`🚀 Webhook running on port ${port}`));
